@@ -18,7 +18,8 @@ class App(ctk.CTk):
         self.attributes("-topmost", True)  # Keeps the window always on top
         self.resizable(False, False)
         
-        self.target_window_title = None
+        self.target_window = None
+        self.windows_map = {}
         self.is_monitoring = False
         self.hotkey = 'ctrl+shift+q'
         
@@ -44,19 +45,25 @@ class App(ctk.CTk):
         self.refresh_windows()
         
     def refresh_windows(self):
-        windows = gw.getAllTitles()
-        # Filter out empty titles and our own app
-        valid_windows = [w for w in windows if w.strip() and w != "Screen Question Detector"]
-        self.window_combo.configure(values=valid_windows)
-        if valid_windows:
-            self.window_combo.set(valid_windows[0])
+        self.windows_map.clear()
+        for w in gw.getAllWindows():
+            if w.title.strip() and w.title != "Screen Question Detector":
+                # Create a unique key using the title and the permanent OS Window Handle (HWND)
+                # This ensures we don't lose the window if the title changes (e.g. changing tabs in a browser)
+                key = f"{w.title} [ID: {w._hWnd}]"
+                self.windows_map[key] = w
+                
+        valid_keys = list(self.windows_map.keys())
+        self.window_combo.configure(values=valid_keys)
+        if valid_keys:
+            self.window_combo.set(valid_keys[0])
             
     def toggle_monitoring(self):
         if not self.is_monitoring:
-            target = self.window_combo.get()
-            if not target:
+            target_key = self.window_combo.get()
+            if not target_key:
                 return
-            self.target_window_title = target
+            self.target_window = self.windows_map[target_key]
             self.is_monitoring = True
             
             # Switch button to red "Stop" state
@@ -64,7 +71,7 @@ class App(ctk.CTk):
             
             # Bind Hotkey
             keyboard.add_hotkey(self.hotkey, self.trigger_pipeline)
-            self.update_result(f"Monitoring active.\nTarget: {target[:25]}...\nPress {self.hotkey} to capture.")
+            self.update_result(f"Monitoring active.\nTarget locked to Window ID: {self.target_window._hWnd}\nPress {self.hotkey} to capture.")
         else:
             self.is_monitoring = False
             
@@ -88,16 +95,22 @@ class App(ctk.CTk):
     def _process_pipeline(self):
         self.update_result("Capturing window...")
         
+        target_win = self.target_window
+        
         try:
-            target_win = gw.getWindowsWithTitle(self.target_window_title)[0]
-        except IndexError:
-            self.update_result(f"Error: Window '{self.target_window_title[:15]}...' not found.")
+            # Check if window still exists and has valid dimensions
+            if target_win.width <= 0 or target_win.height <= 0:
+                self.update_result("Error: Target window is closed or invalid.")
+                return
+        except Exception:
+            self.update_result("Error: Target window is closed or invalid.")
             return
             
         if target_win.isMinimized:
             target_win.restore()
             
         bbox = {"top": target_win.top, "left": target_win.left, "width": target_win.width, "height": target_win.height}
+
         
         image_path = capture_window(bbox, "test.png")
         if not image_path:
