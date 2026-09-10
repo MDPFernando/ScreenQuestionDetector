@@ -1,90 +1,121 @@
-import keyboard
-import time
-import tkinter as tk
+import customtkinter as ctk
 import pygetwindow as gw
+import keyboard
+import threading
 from capture import capture_window
 from ocr import extract_text
 from llm import get_answer
-from ui_settings import SettingsUI
 
-class QuestionDetectorApp:
+# Modern dark theme settings
+ctk.set_appearance_mode("dark")
+ctk.set_default_color_theme("blue")
+
+class App(ctk.CTk):
     def __init__(self):
-        self.root = tk.Tk()
+        super().__init__()
+        self.title("Screen Question Detector")
+        self.geometry("400x350")
+        self.attributes("-topmost", True)  # Keeps the window always on top
+        self.resizable(False, False)
+        
         self.target_window_title = None
+        self.is_monitoring = False
+        self.hotkey = 'ctrl+shift+q'
         
-        # Initialize Settings UI
-        self.settings_ui = SettingsUI(self.root, self.on_start_monitoring)
+        # --- UI Layout ---
         
-        # Bind Esc key to close the app if pressed while UI is focused
-        self.root.bind("<Escape>", lambda e: self.root.destroy())
+        self.title_label = ctk.CTkLabel(self, text="Target Window Selection", font=ctk.CTkFont(size=16, weight="bold"))
+        self.title_label.pack(pady=(15, 5))
         
-    def on_start_monitoring(self, target_title):
-        self.target_window_title = target_title
-        print(f"Target window set to: {self.target_window_title}")
+        self.window_combo = ctk.CTkComboBox(self, width=320, state="readonly")
+        self.window_combo.pack(pady=5)
         
-        # Minimize the settings window to keep it out of the way, or withdraw it
-        self.root.iconify() 
-        # Using iconify instead of withdraw so the user can easily bring it back to change the window
+        self.refresh_btn = ctk.CTkButton(self, text="Refresh Windows", command=self.refresh_windows, fg_color="transparent", border_width=1, width=150)
+        self.refresh_btn.pack(pady=5)
         
-        hotkey = 'ctrl+shift+q'
-        print(f"Monitoring active! Press '{hotkey}' to capture the window and get an answer.")
+        self.monitor_btn = ctk.CTkButton(self, text="Start Monitoring", command=self.toggle_monitoring, width=200, height=35, font=ctk.CTkFont(size=14, weight="bold"))
+        self.monitor_btn.pack(pady=(15, 10))
         
-        # We need to ensure we don't bind multiple times if they change the window
-        keyboard.unhook_all()
-        keyboard.add_hotkey(hotkey, self.process_question)
+        self.result_box = ctk.CTkTextbox(self, width=360, height=110, font=ctk.CTkFont(size=16, weight="bold"), text_color="#00FF00")
+        self.result_box.pack(pady=5)
+        self.result_box.insert("0.0", "Waiting for target selection...")
+        self.result_box.configure(state="disabled")
         
-    def process_question(self):
-        if not self.target_window_title:
-            return
+        self.refresh_windows()
+        
+    def refresh_windows(self):
+        windows = gw.getAllTitles()
+        # Filter out empty titles and our own app
+        valid_windows = [w for w in windows if w.strip() and w != "Screen Question Detector"]
+        self.window_combo.configure(values=valid_windows)
+        if valid_windows:
+            self.window_combo.set(valid_windows[0])
             
-        print("\n--- Hotkey Pressed: Processing Window ---")
+    def toggle_monitoring(self):
+        if not self.is_monitoring:
+            target = self.window_combo.get()
+            if not target:
+                return
+            self.target_window_title = target
+            self.is_monitoring = True
+            
+            # Switch button to red "Stop" state
+            self.monitor_btn.configure(text="Stop Monitoring", fg_color="#C0392B", hover_color="#922B21")
+            
+            # Bind Hotkey
+            keyboard.add_hotkey(self.hotkey, self.trigger_pipeline)
+            self.update_result(f"Monitoring active.\nTarget: {target[:25]}...\nPress {self.hotkey} to capture.")
+        else:
+            self.is_monitoring = False
+            
+            # Switch button back to normal state
+            self.monitor_btn.configure(text="Start Monitoring", fg_color=["#3a7ebf", "#1f538d"], hover_color=["#325882", "#14375e"])
+            
+            # Unbind Hotkey
+            keyboard.unhook_all()
+            self.update_result("Monitoring stopped.")
+            
+    def update_result(self, text):
+        self.result_box.configure(state="normal")
+        self.result_box.delete("0.0", "end")
+        self.result_box.insert("0.0", text)
+        self.result_box.configure(state="disabled")
         
-        # Find the target window
+    def trigger_pipeline(self):
+        # Run pipeline in a background thread so the UI doesn't freeze
+        threading.Thread(target=self._process_pipeline, daemon=True).start()
+        
+    def _process_pipeline(self):
+        self.update_result("Capturing window...")
+        
         try:
             target_win = gw.getWindowsWithTitle(self.target_window_title)[0]
         except IndexError:
-            print(f"Error: Could not find window with title '{self.target_window_title}'. Is it closed?")
+            self.update_result(f"Error: Window '{self.target_window_title[:15]}...' not found.")
             return
             
-        # Ensure it's not minimized
         if target_win.isMinimized:
-            print("Target window is minimized. Restoring...")
             target_win.restore()
-            time.sleep(0.5)
             
-        bbox = {
-            "top": target_win.top,
-            "left": target_win.left,
-            "width": target_win.width,
-            "height": target_win.height
-        }
+        bbox = {"top": target_win.top, "left": target_win.left, "width": target_win.width, "height": target_win.height}
         
-        # Step 1: Capture Window
-        print(f"1. Capturing window '{self.target_window_title}'...")
         image_path = capture_window(bbox, "test.png")
         if not image_path:
+            self.update_result("Capture failed.")
             return
-        
-        # Step 2: Extract Text
-        print("2. Extracting text via OCR...")
+            
+        self.update_result("Extracting text via OCR...")
         extracted_text = extract_text(image_path)
         
         if not extracted_text:
-            print("No text found. Aborting.")
+            self.update_result("No text detected in capture.")
             return
             
-        # Step 3: Get Answer from LLM
-        print("3. Querying Gemini for answer...")
+        self.update_result("Querying Gemini AI...")
         answer = get_answer(extracted_text)
         
-        print("\n===============================")
-        print(f"FINAL ANSWER: {answer}")
-        print("===============================\n")
-
-    def run(self):
-        # Run the tkinter main loop
-        self.root.mainloop()
+        self.update_result(f"FINAL ANSWER:\n{answer}")
 
 if __name__ == "__main__":
-    app = QuestionDetectorApp()
-    app.run()
+    app = App()
+    app.mainloop()
