@@ -28,9 +28,9 @@ def get_answer(ocr_text):
         return "No text detected."
         
     try:
-        # Using gemini-3.6-flash for the fastest possible response
+        # Using gemini-1.5-flash as the stable production model
         response = client.models.generate_content(
-            model='gemini-3.6-flash',
+            model='gemini-1.5-flash',
             contents=ocr_text,
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_PROMPT,
@@ -38,6 +38,8 @@ def get_answer(ocr_text):
         )
         return response.text.strip()
     except Exception as e:
+        if "503" in str(e):
+            return "Google API is overloaded (503). Just press the hotkey again!"
         return f"LLM Error: {e}"
 
 if __name__ == "__main__":
