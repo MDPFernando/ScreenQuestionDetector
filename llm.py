@@ -28,9 +28,9 @@ def get_answer(ocr_text):
         return "No text detected."
         
     try:
-        # Using gemini-1.5-flash as the stable production model
+        # Using gemini-3.8-flash as the latest stable model
         response = client.models.generate_content(
-            model='gemini-1.5-flash',
+            model='gemini-3.8-flash',
             contents=ocr_text,
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_PROMPT,
