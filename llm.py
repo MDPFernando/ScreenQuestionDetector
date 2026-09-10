@@ -1,5 +1,6 @@
 import os
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -8,9 +9,10 @@ load_dotenv()
 # Configure Gemini API
 api_key = os.getenv("GEMINI_API_KEY")
 if api_key:
-    genai.configure(api_key=api_key)
+    client = genai.Client(api_key=api_key)
 else:
     print("Error: GEMINI_API_KEY not found in .env file.")
+    client = None
 
 # Define the strict system prompt
 SYSTEM_PROMPT = """
@@ -26,13 +28,14 @@ def get_answer(ocr_text):
         return "No text detected."
         
     try:
-        # Using gemini-1.5-flash for the fastest possible response
-        model = genai.GenerativeModel(
-            model_name="gemini-1.5-flash",
-            system_instruction=SYSTEM_PROMPT
+        # Using gemini-2.5-flash for the fastest possible response
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=ocr_text,
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_PROMPT,
+            ),
         )
-        
-        response = model.generate_content(ocr_text)
         return response.text.strip()
     except Exception as e:
         return f"LLM Error: {e}"
