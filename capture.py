@@ -2,9 +2,9 @@ import mss
 import mss.tools
 
 def capture_screen_center(output_filename="test.png"):
-    with mss.mss() as sct:
-        # Get information of primary monitor
-        monitor = sct.monitors[1]
+    with mss.MSS() as sct:
+        # Get information of primary monitor, fallback to 0 if needed
+        monitor = sct.monitors[1] if len(sct.monitors) > 1 else sct.monitors[0]
         
         # Calculate center 500x500 region
         width, height = 500, 500
