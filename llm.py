@@ -31,10 +31,10 @@ def get_answer_from_image(image_path):
     try:
         img = Image.open(image_path)
         
-        # Using gemini-3.8-flash as the latest stable model
+        # Using gemini-flash-lite-latest for ultra-low latency (under 2 seconds)
         # We pass both the image and a text prompt instructing it to answer
         response = client.models.generate_content(
-            model='gemini-3.8-flash',
+            model='gemini-flash-lite-latest',
             contents=[img, "What is the correct answer to the question in this image?"],
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_PROMPT,
