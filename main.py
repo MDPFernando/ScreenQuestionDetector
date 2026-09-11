@@ -111,7 +111,7 @@ class App(ctk.CTk):
         bbox = {"top": target_win.top, "left": target_win.left, "width": target_win.width, "height": target_win.height}
 
         
-        image_path = capture_window(bbox, "test.png")
+        image_path = capture_window(bbox, "test.jpg")
         if not image_path:
             self.update_result("Capture failed.")
             return

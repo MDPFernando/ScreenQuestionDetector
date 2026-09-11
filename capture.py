@@ -1,28 +1,29 @@
 import mss
-import mss.tools
+from PIL import Image
 
-def capture_window(bbox, output_filename="test.png"):
-    """
-    Captures a specific region of the screen defined by bbox.
-    bbox should be a dictionary: {"top": y, "left": x, "width": w, "height": h}
-    """
-    with mss.MSS() as sct:
+def capture_window(bbox, output_filename="test.jpg"):
+    with mss.mss() as sct:
         try:
-            # Grab the data using the provided bounding box
             sct_img = sct.grab(bbox)
+            # Convert raw bytes to PIL Image (C-optimized, extremely fast)
+            img = Image.frombytes("RGB", sct_img.size, sct_img.bgra, "raw", "BGRX")
             
-            # Save to a file
-            mss.tools.to_png(sct_img.rgb, sct_img.size, output=output_filename)
-            print(f"Successfully captured window region and saved to {output_filename}")
+            # Downscale massive screens to save network upload time (1200px max)
+            max_dim = 1600
+            if img.width > max_dim or img.height > max_dim:
+                img.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
+                
+            # Save as optimized JPEG to slash file size from ~10MB down to ~150KB
+            img.save(output_filename, format="JPEG", quality=80, optimize=True)
             return output_filename
         except Exception as e:
-            print(f"Error capturing window: {e}")
+            print(f"Capture error: {e}")
             return None
 
 if __name__ == "__main__":
     # Test fallback: capture a 500x500 box at the top left of the primary monitor
     try:
-        with mss.MSS() as sct:
+        with mss.mss() as sct:
             monitor = sct.monitors[1] if len(sct.monitors) > 1 else sct.monitors[0]
             test_bbox = {"top": monitor["top"], "left": monitor["left"], "width": 500, "height": 500}
             capture_window(test_bbox)
