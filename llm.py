@@ -1,6 +1,7 @@
 import os
 from google import genai
 from google.genai import types
+from PIL import Image
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -17,21 +18,24 @@ else:
 # Define the strict system prompt
 SYSTEM_PROMPT = """
 You are an expert test-taking assistant.
-You will be provided with noisy OCR text extracted from a multiple-choice question on a screen.
-Your job is to identify the question, evaluate the options, and determine the correct answer.
+You will be provided with an image of a multiple-choice question on a screen.
+Your job is to read the question from the image, evaluate the options, and determine the correct answer.
 CRITICAL INSTRUCTION: You must output ONLY the final answer. Do not provide explanations, do not provide conversational filler, do not repeat the question.
 If the options are A, B, C, D, output just the letter of the correct option. If there are no letters, output just the correct word or phrase.
 """
 
-def get_answer(ocr_text):
-    if not ocr_text or not ocr_text.strip():
-        return "No text detected."
+def get_answer_from_image(image_path):
+    if not client:
+        return "Error: Gemini API not configured."
         
     try:
+        img = Image.open(image_path)
+        
         # Using gemini-3.8-flash as the latest stable model
+        # We pass both the image and a text prompt instructing it to answer
         response = client.models.generate_content(
             model='gemini-3.8-flash',
-            contents=ocr_text,
+            contents=[img, "What is the correct answer to the question in this image?"],
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_PROMPT,
             ),
@@ -41,19 +45,3 @@ def get_answer(ocr_text):
         if "503" in str(e):
             return "Google API is overloaded (503). Just press the hotkey again!"
         return f"LLM Error: {e}"
-
-if __name__ == "__main__":
-    # Test the LLM integration with a dummy question
-    dummy_ocr_text = """
-    Wh4t 1s th3 cap1tal of Franc3?
-    A) London
-    B) B3rlin
-    C) Par1s
-    D) Madr1d
-    """
-    print("Testing Gemini API with noisy dummy OCR text...")
-    print(f"Input text:\n{dummy_ocr_text}")
-    print("--- Gemini Answer ---")
-    answer = get_answer(dummy_ocr_text)
-    print(answer)
-    print("---------------------")

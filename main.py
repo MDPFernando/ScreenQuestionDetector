@@ -3,8 +3,7 @@ import pygetwindow as gw
 import keyboard
 import threading
 from capture import capture_window
-from ocr import extract_text
-from llm import get_answer
+from llm import get_answer_from_image
 
 # Modern dark theme settings
 ctk.set_appearance_mode("dark")
@@ -117,15 +116,8 @@ class App(ctk.CTk):
             self.update_result("Capture failed.")
             return
             
-        self.update_result("Extracting text via OCR...")
-        extracted_text = extract_text(image_path)
-        
-        if not extracted_text:
-            self.update_result("No text detected in capture.")
-            return
-            
-        self.update_result("Querying Gemini AI...")
-        answer = get_answer(extracted_text)
+        self.update_result("Analyzing image with Gemini Vision...")
+        answer = get_answer_from_image(image_path)
         
         self.update_result(f"FINAL ANSWER:\n{answer}")
 
